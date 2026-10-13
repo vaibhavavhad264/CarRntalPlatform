@@ -1,0 +1,20 @@
+<article class="car-card {{ '' if c.availability else 'off' }}">
+  <div class="car-image">
+    <img src="{{ url_for('car_image', car_id=c.car_id) }}" alt="{{ c.model }}" loading="lazy">
+    {% if not c.availability %}<span class="badge-now off">Unavailable</span>
+    {% elif c.in_use %}<span class="badge-now off">Unavailable now</span>{% endif %}
+    <button class="favorite" type="button" aria-label="Favourite">♡</button>
+  </div>
+  <div class="car-content">
+    <div class="car-title"><div><h3>{{ c.model }}</h3><span>{{ c.specification }}</span></div></div>
+    <div class="car-specs"><span>{{ c.seats }} Seats</span><span>{{ 'AC' if c.ac else 'Non-AC' }}</span>
+      {% if c.electric %}<span class="ev">⚡ Electric</span>{% else %}<span>Non-electric</span>{% endif %}<span>📍 {{ c.city }}</span></div>
+    <p class="stars">{{ '★' * (c.rating|round|int) }}{{ '☆' * (5 - (c.rating|round|int)) }} {{ c.rating }}</p>
+    <div class="car-foot">
+      <strong class="price">₹{{ '{:,.0f}'.format(c.price_per_hour) }}<small> / hour</small></strong>
+      {% if c.availability %}<a class="btn btn-primary" href="{{ url_for('booking', car_id=c.car_id) }}">{{ 'Book Later' if c.in_use else 'Book Now' }}</a>
+      {% else %}<span class="tag">Unavailable</span>{% endif %}
+    </div>
+    {% if c.availability and c.in_use %}<p class="book-later">Currently booked – you can still book later dates.</p>{% endif %}
+  </div>
+</article>

@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}RentCar{% endblock %} | RentCar</title>
+<script>try{var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}</script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+{% if request.endpoint == 'admin_dashboard' %}
+<header class="navbar" id="navbar">
+  <a class="logo" href="{{ url_for('admin_dashboard') }}">Rent<span>Car</span> <small style="font-size:13px;color:var(--muted)">Admin</small></a>
+  <nav><a href="{{ url_for('admin_dashboard') }}" class="active">Dashboard</a></nav>
+  <div class="nav-actions">
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="Toggle light/dark mode">🌙</button>
+    <a class="btn btn-dark" href="{{ url_for('admin_logout') }}">Logout</a>
+  </div>
+  <button class="menu-btn" id="burger" aria-label="Menu">☰</button>
+</header>
+{% else %}
+<header class="navbar" id="navbar">
+  <a class="logo" href="{{ url_for('index') }}">Rent<span>Car</span></a>
+  <nav>
+    <a href="{{ url_for('index') }}" class="{{ 'active' if request.endpoint=='index' }}">Home</a>
+    <a href="{{ url_for('rentcar') }}" class="{{ 'active' if request.endpoint=='rentcar' }}">Rent a Car</a>
+    {% if session.username %}<a href="{{ url_for('my_bookings') }}" class="{{ 'active' if request.endpoint=='my_bookings' }}">My Bookings</a>{% endif %}
+    <a href="{{ url_for('about') }}" class="{{ 'active' if request.endpoint=='about' }}">About Us</a>
+    <a href="{{ url_for('faq') }}" class="{{ 'active' if request.endpoint=='faq' }}">FAQs</a>
+  </nav>
+  <div class="nav-actions">
+    <button class="theme-btn" id="themeBtn" type="button" aria-label="Toggle light/dark mode">🌙</button>
+    <div class="dropdown" id="acct">
+      <button class="btn btn-dark dd-btn" id="ddBtn" type="button" aria-haspopup="true">
+        {% if session.username %}Welcome, {{ session.username }}{% else %}Account{% endif %} ▾</button>
+      <div class="dd-menu">
+        {% if session.username %}
+          <a href="{{ url_for('my_bookings') }}">My Bookings</a>
+          <a href="{{ url_for('logout') }}">Logout</a>
+        {% else %}
+          <a href="{{ url_for('login') }}">Login</a>
+          <a href="{{ url_for('register') }}">Register</a>
+        {% endif %}
+        <hr><span class="dd-label">ADMIN</span>
+        {% if session.admin %}
+          <a href="{{ url_for('admin_dashboard') }}">Dashboard</a>
+          <a href="{{ url_for('admin_logout') }}">Admin Logout</a>
+        {% else %}
+          <a href="{{ url_for('admin_login') }}">Admin Login</a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <button class="menu-btn" id="burger" aria-label="Menu">☰</button>
+</header>
+{% endif %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% if messages %}<div class="flashes">
+    {% for cat, msg in messages %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+  </div>{% endif %}
+{% endwith %}
+<main>{% block content %}{% endblock %}</main>
+{% if request.endpoint != 'admin_dashboard' %}
+<footer class="footer">
+  <div class="footer-main">
+    <div><a class="logo" href="{{ url_for('index') }}">Rent<span>Car</span></a><p>Your trusted car rental platform.</p></div>
+    <div><h4>Links</h4><a href="{{ url_for('index') }}">Home</a><a href="{{ url_for('rentcar') }}">Rent a Car</a>
+      <a href="{{ url_for('about') }}">About Us</a><a href="{{ url_for('faq') }}">FAQs</a></div>
+    <div><h4>Contact</h4><a href="#">Email: support@rentcar.com</a><a href="#">Phone: +91 XXXXX XXXXX</a></div>
+  </div>
+  <div class="footer-bottom">© 2026 RentCar. All rights reserved.</div>
+</footer>
+{% endif %}
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

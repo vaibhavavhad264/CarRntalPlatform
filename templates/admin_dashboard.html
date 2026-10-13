@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hm %}
+{% block title %}Admin Dashboard{% endblock %}
+{% block content %}
+<section class="dashboard-section">
+  <div class="dashboard-heading"><h1>Admin <span>dashboard</span></h1></div>
+  <div class="stat-grid">
+    <div class="stat"><small>Registered users</small><strong>{{ users_n }}</strong></div>
+    <div class="stat"><small>Revenue generated</small><strong>₹{{ '{:,.2f}'.format(bk.revenue) }}</strong></div>
+    <div class="stat"><small>Cars</small><strong>{{ cars_n }}</strong></div>
+    <div class="stat"><small>Confirmed bookings</small><strong>{{ bk.n }}</strong></div>
+    <div class="stat"><small>Cancelled bookings</small><strong>{{ cancelled }}</strong></div>
+    <div class="stat"><small>Discounts given</small><strong>₹{{ '{:,.2f}'.format(bk.disc) }}</strong></div>
+  </div>
+  <div class="tabs"><button class="tab-btn on" data-tab="t-users">Registered users</button>
+    <button class="tab-btn" data-tab="t-cars">Cars</button><button class="tab-btn" data-tab="t-bookings">Bookings</button></div>
+
+  <div class="tab-panel on" id="t-users"><div class="table-wrap"><table class="data-table">
+    <tr><th>USERNAME</th><th>EMAIL</th><th>AGE</th><th>LICENSE</th></tr>
+    {% for u in users %}<tr><td>{{ u.username }}</td><td>{{ u.email }}</td><td>{{ u.age }}</td><td>{{ 'Yes' if u.license else 'No' }}</td></tr>
+    {% else %}<tr><td colspan="4">No registered users yet.</td></tr>{% endfor %}</table></div></div>
+
+  <div class="tab-panel" id="t-cars"><div class="table-wrap"><table class="data-table">
+    <tr><th>ID</th><th>MODEL</th><th>CITY</th><th>SEATS</th><th>₹/HOUR</th><th>AC</th><th>FUEL</th><th>IN SERVICE</th><th>RATING</th></tr>
+    {% for c in cars %}<tr><td>{{ c.car_id }}</td><td>{{ c.model }}</td><td>{{ c.city }}</td><td>{{ c.seats }}</td>
+      <td>{{ '{:,.0f}'.format(c.price_per_hour) }}</td><td>{{ 'AC' if c.ac else 'Non-AC' }}</td>
+      <td>{{ 'Electric' if c.electric else 'Non-electric' }}</td><td>{{ 'Yes' if c.availability else 'No' }}</td><td>{{ c.rating }}</td></tr>{% endfor %}</table></div></div>
+
+  <div class="tab-panel" id="t-bookings"><div class="table-wrap"><table class="data-table">
+    <tr><th>ID</th><th>USER</th><th>CAR</th><th>LOCATION</th><th>START</th><th>END</th><th>SUBTOTAL</th><th>DISCOUNT</th><th>TOTAL</th><th>STATUS</th></tr>
+    {% for b in bookings %}<tr><td>#{{ b.booking_id }}</td><td>{{ b.username }}</td><td>{{ b.model }}</td><td>{{ b.location }}</td>
+      <td>{{ b.date_start.strftime('%d %b %Y') }} {{ hm(b.start_time) }}</td><td>{{ b.date_end.strftime('%d %b %Y') }} {{ hm(b.end_time) }}</td>
+      <td>₹{{ '{:,.2f}'.format(b.subtotal) }}</td><td>₹{{ '{:,.2f}'.format(b.discount_amount) }}</td><td>₹{{ '{:,.2f}'.format(b.total_amount) }}</td>
+      <td><span class="booking-status {{ 'cancelled' if b.status=='cancelled' else 'done' }}">{{ b.status|capitalize }}</span></td></tr>
+    {% else %}<tr><td colspan="10">No bookings yet.</td></tr>{% endfor %}</table></div></div>
+</section>
+{% endblock %}

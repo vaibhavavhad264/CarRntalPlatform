@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Rent a Car{% endblock %}
+{% block content %}
+<section class="page-hero"><p class="eyebrow">OUR FLEET</p><h1>Find your <span>perfect ride.</span></h1>
+  <p>Filter by city, seats, AC, fuel type and price, then sort to suit you.</p></section>
+<section class="fleet-section"><div class="fleet-layout">
+<form class="sidebar" method="get" action="{{ url_for('rentcar') }}" id="filterForm">
+  <h3>Filters</h3>
+  <label>Search</label><input name="q" placeholder="Search car model..." value="{{ a.get('q','') }}">
+  <label>City</label><select name="city"><option value="">All Cities</option>
+    {% for c in cities %}<option {{ 'selected' if a.get('city')==c }}>{{ c }}</option>{% endfor %}</select>
+  <label>Seats</label><select name="seats"><option value="">All</option>
+    {% for s in seat_opts %}<option value="{{ s }}" {{ 'selected' if a.get('seats')==s|string }}>{{ s }} seats</option>{% endfor %}</select>
+  <label>Air conditioning</label><select name="ac"><option value="">All</option>
+    <option value="1" {{ 'selected' if a.get('ac')=='1' }}>AC</option><option value="0" {{ 'selected' if a.get('ac')=='0' }}>Non-AC</option></select>
+  <label>Fuel type</label><select name="electric"><option value="">All</option>
+    <option value="1" {{ 'selected' if a.get('electric')=='1' }}>Electric</option><option value="0" {{ 'selected' if a.get('electric')=='0' }}>Non-electric</option></select>
+  <label>Price per hour (₹)</label>
+  <div class="row"><input type="number" name="min_price" min="0" placeholder="Min" value="{{ a.get('min_price','') }}">
+    <input type="number" name="max_price" min="0" placeholder="Max" value="{{ a.get('max_price','') }}"></div>
+  <label>Sort by</label><select name="sort" id="sortSel">
+    {% for v, t in [('','Default'),('price_asc','Price: Low to High'),('price_desc','Price: High to Low'),('rating_desc','Rating: High to Low'),('seats_asc','Seats: Low to High'),('seats_desc','Seats: High to Low'),('model_asc','Model: A-Z'),('electric_first','Electric first'),('electric_last','Non-electric first')] %}
+    <option value="{{ v }}" {{ 'selected' if a.get('sort','')==v }}>{{ t }}</option>{% endfor %}</select>
+  <div class="filter-actions"><button class="btn btn-primary" type="submit">Apply</button>
+    <a class="btn btn-outline" href="{{ url_for('rentcar') }}">Reset</a></div>
+</form>
+<div class="fleet-main">
+  <div class="fleet-top"><span>{{ cars|length }} car{{ '' if cars|length==1 else 's' }} found</span></div>
+  <div class="car-grid">
+    {% for c in cars %}{% include "_car_card.html" %}
+    {% else %}<p class="empty">No cars match these filters. Try resetting them.</p>{% endfor %}
+  </div>
+</div></div></section>
+{% endblock %}

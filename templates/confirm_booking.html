@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Confirm Booking{% endblock %}
+{% block content %}
+{% set c = d.car %}
+<section class="booking-section">
+  <div class="booking-header"><p class="eyebrow">ALMOST DONE</p><h1>Confirm your <span>booking</span></h1></div>
+  <div class="booking-layout">
+    <div class="booking-form">
+      <h2>Booking details</h2>
+      <div class="detail-block"><h3>Customer</h3><p>{{ session.username }} · {{ user.email }}</p>
+      <h3>Car</h3><p>{{ c.model }} – {{ c.specification }}<br>{{ c.city }} | {{ c.seats }} Seats | {{ 'AC' if c.ac else 'Non-AC' }} | ★ {{ c.rating }}</p>
+      <h3>Rental</h3><p>Location: {{ d.location }}<br>
+        Start: {{ d.start.strftime('%d %b %Y') }}, {{ d.start.strftime('%I:%M %p') }}<br>
+        End: {{ d.end.strftime('%d %b %Y') }}, {{ d.end.strftime('%I:%M %p') }}<br>
+        Duration: {{ d.hours }} hour{{ '' if d.hours==1 else 's' }}</p></div>
+    </div>
+    <aside class="booking-summary">
+      <h2>Bill</h2>
+      <div class="booking-car"><img src="{{ url_for('car_image', car_id=c.car_id) }}" alt="{{ c.model }}"><div><strong>{{ c.model }}</strong><p class="car-meta">{{ c.city }}</p></div></div>
+      <table class="bill"><tr><td>Price per hour</td><td>₹{{ '{:,.0f}'.format(c.price_per_hour) }}</td></tr>
+        <tr><td>× Rental duration</td><td>{{ d.hours }} h</td></tr>
+        <tr><td>Subtotal</td><td>₹{{ '{:,.2f}'.format(d.subtotal) }}</td></tr>
+        {% if d.first %}<tr class="disc"><td>First-booking discount (30%)</td><td>− ₹{{ '{:,.2f}'.format(d.discount) }}</td></tr>{% endif %}
+        <tr class="total"><td>Total</td><td>₹{{ '{:,.2f}'.format(d.total) }}</td></tr></table>
+      <form method="post" action="{{ url_for('confirm_booking') }}" data-confirm="Confirm this booking?">
+        {% for k in ['car_id','location','start_date','start_time','end_date','end_time'] %}<input type="hidden" name="{{ k }}" value="{{ f[k] }}">{% endfor %}
+        <button class="btn btn-primary btn-large btn-full" name="confirm" value="1" type="submit">Confirm Booking</button>
+        <a class="btn btn-outline btn-large btn-full" style="margin-top:10px" href="{{ url_for('booking', car_id=c.car_id) }}">Back / Edit Booking</a>
+      </form>
+    </aside>
+  </div>
+</section>
+{% endblock %}

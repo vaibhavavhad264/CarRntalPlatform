@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}FAQs{% endblock %}
+{% block content %}
+<section class="page-hero"><p class="eyebrow">HELP</p><h1>Frequently asked <span>questions</span></h1></section>
+<section class="section narrow">
+{% set faqs = [
+ ("What is RentCar?","An online platform to browse, filter and book rental cars by the hour."),
+ ("Who can rent a car?","Any registered user aged 18 or older with a valid driving license."),
+ ("What is the minimum age?","18 years. Registration is rejected below this age."),
+ ("Do I need a driving license?","Yes. You enter your license number when you register."),
+ ("How do I rent a car?","Log in, open Rent a Car, choose a car, click Book Now and fill in the booking form."),
+ ("Can I choose between AC and Non-AC?","Yes. Use the AC filter on the Rent a Car page."),
+ ("Can I filter cars by city?","Yes. You can also filter by seats, model, price and sort the results."),
+ ("How is the rental price calculated?","Price per hour × rental duration. Partial hours are rounded up to the next hour."),
+ ("Can I cancel a booking?","Cancellation is not part of this version of the project."),
+ ("How do I confirm my booking?","Review the summary page and click Confirm Booking.")] %}
+{% for q, a in faqs %}
+<div class="faq"><button class="faq-q">{{ q }}<span>+</span></button><div class="faq-a"><p>{{ a }}</p></div></div>
+{% endfor %}</section>
+{% endblock %}

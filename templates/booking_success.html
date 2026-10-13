@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hm %}
+{% block title %}Booking Confirmed{% endblock %}
+{% block content %}
+<section class="booking-section"><div class="card-box narrow center">
+  <div class="check">✓</div><h1 style="font-family:'Space Grotesk'">Booking Confirmed!</h1>
+  <table class="bill">
+    <tr><td>Booking ID</td><td>#{{ b.booking_id }}</td></tr><tr><td>Username</td><td>{{ b.username }}</td></tr>
+    <tr><td>Car</td><td>{{ b.model }}</td></tr><tr><td>Location</td><td>{{ b.location }}</td></tr>
+    <tr><td>Start</td><td>{{ b.date_start.strftime('%d %b %Y') }}, {{ hm(b.start_time) }}</td></tr>
+    <tr><td>End</td><td>{{ b.date_end.strftime('%d %b %Y') }}, {{ hm(b.end_time) }}</td></tr>
+    <tr><td>Subtotal</td><td>₹{{ '{:,.2f}'.format(b.subtotal) }}</td></tr>
+    {% if b.discount_amount > 0 %}<tr class="disc"><td>First-booking discount (30%)</td><td>− ₹{{ '{:,.2f}'.format(b.discount_amount) }}</td></tr>{% endif %}
+    <tr class="total"><td>Total bill</td><td>₹{{ '{:,.2f}'.format(b.total_amount) }}</td></tr></table>
+  <div class="actions"><a class="btn btn-primary" href="{{ url_for('index') }}">Back to Home</a>
+    <a class="btn btn-outline" href="{{ url_for('rentcar') }}">Rent Another Car</a></div>
+</div></section>
+{% endblock %}

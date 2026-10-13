@@ -1,0 +1,137 @@
+{% extends "base.html" %}
+{% block title %}Home{% endblock %}
+{% block content %}
+<div class="splash" id="splash"><a class="logo">Rent<span>Car</span></a>
+  <div class="splash-track">{% include "_running_car.html" %}</div>
+</div>
+<script>try { if (sessionStorage.getItem('splashSeen')) { document.getElementById('splash').remove() } else { sessionStorage.setItem('splashSeen', '1') } } catch (e) { }</script>
+<section class="hero">
+  <div class="hero-content">
+    <div class="badge">✦ Premium mobility, made simple</div>
+    <h1>Rent the Right Car.<br><span>Ride with Freedom.</span></h1>
+    <p>Find affordable and reliable cars for your journey.</p>
+    <div class="hero-buttons">
+      <a href="{{ url_for('rentcar') }}" class="btn btn-primary btn-large">Rent a Car →</a>
+      <a href="#how-it-works" class="btn btn-outline btn-large">How it works</a>
+    </div>
+    <div class="hero-stats">
+      <div><strong>{{ stats.cars }}</strong><span>Cars</span></div>
+      <div><strong>{{ stats.cities }}</strong><span>Cities</span></div>
+      <div><strong>{{ stats.rating }}</strong><span>Average Rating</span></div>
+    </div>
+  </div>
+  <div class="hero-car">
+    <div class="hero-glow"></div>
+    <img src="{{ url_for('static', filename='images/hero.jpg') }}" alt="Premium rental car">
+    <div class="floating-card"><span class="floating-icon">✓</span>
+      <div><strong>Available today</strong><small>Ready for your journey</small></div>
+    </div>
+  </div>
+</section>
+
+<form class="search-box" method="get" action="{{ url_for('rentcar') }}">
+  <div class="search-item"><span>📍</span>
+    <div><small>City</small>
+      <select name="city">
+        <option value="">All Cities</option>{% for c in cities %}<option>{{ c }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="search-item"><span>💺</span>
+    <div><small>Seats</small>
+      <select name="seats">
+        <option value="">All</option>{% for s in [2,4,5,6,7,8] %}<option>{{ s }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="search-item"><span>❄️</span>
+    <div><small>Air conditioning</small>
+      <select name="ac">
+        <option value="">All</option>
+        <option value="1">AC</option>
+        <option value="0">Non-AC</option>
+      </select>
+    </div>
+  </div>
+  <button class="btn btn-dark search-btn" type="submit">Search Cars</button>
+</form>
+
+<section class="section">
+  <div class="section-heading">
+    <div>
+      <p class="eyebrow">OUR FLEET</p>
+      <h2>Choose your <span>perfect ride.</span></h2>
+    </div>
+    <a href="{{ url_for('rentcar') }}" class="text-link">View all cars →</a>
+  </div>
+  <div class="car-grid">{% for c in featured %}{% include "_car_card.html" %}{% endfor %}</div>
+</section>
+
+<section class="features-section">
+  <div class="section-heading centered">
+    <p class="eyebrow">WHY RENTCAR</p>
+    <h2>More than just a <span>rental.</span></h2>
+    <p>Everything you need for a smooth and memorable journey.</p>
+  </div>
+  <div class="features-grid">
+    <div class="feature-card reveal">
+      <div class="feature-icon">🚘</div>
+      <h3>Wide Selection</h3>
+      <p>Choose from multiple cars and models.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon">💰</div>
+      <h3>Affordable Prices</h3>
+      <p>Find rental cars at competitive hourly rates.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon">⚡</div>
+      <h3>Easy Booking</h3>
+      <p>Book a car in just a few steps.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon">🌆</div>
+      <h3>Multiple Cities</h3>
+      <p>Find rental cars across different cities.</p>
+    </div>
+    <div class="feature-card reveal">
+      <div class="feature-icon">🛡️</div>
+      <h3>Safe &amp; Reliable</h3>
+      <p>Simple and transparent rental process.</p>
+    </div>
+  </div>
+</section>
+
+<section class="how-section" id="how-it-works">
+  <div class="section-heading centered">
+    <p class="eyebrow">HOW IT WORKS</p>
+    <h2>Ready in <span>three simple steps.</span></h2>
+  </div>
+  <div class="steps">
+    <div class="step">
+      <div class="step-number">01</div>
+      <h3>Choose your car</h3>
+      <p>Browse, filter and sort the fleet to find the right vehicle.</p>
+    </div>
+    <div class="step">
+      <div class="step-number">02</div>
+      <h3>Book your journey</h3>
+      <p>Pick your dates and times and review your bill.</p>
+    </div>
+    <div class="step">
+      <div class="step-number">03</div>
+      <h3>Enjoy the ride</h3>
+      <p>Confirm your booking and hit the road.</p>
+    </div>
+  </div>
+</section>
+
+<section class="cta-section">
+  <div>
+    <p class="eyebrow">START YOUR JOURNEY</p>
+    <h2>Where will you go next?</h2>
+    <p>Find a car that matches your journey.</p>
+  </div>
+  <a href="{{ url_for('rentcar') }}" class="btn btn-light btn-large">Rent a Car →</a>
+</section>
+{% endblock %}
