@@ -4,7 +4,7 @@ from decimal import Decimal
 from functools import wraps
 import mysql.connector
 from flask import (Flask, render_template, request, redirect, url_for,
-                   session, flash, Response)
+                   session, flash, Response, send_file)
 from werkzeug.security import generate_password_hash, check_password_hash
 from database import get_connection, seed_images, ensure_admin, find_photo, MIMES
 
@@ -74,6 +74,14 @@ def about():
 def faq():
     return render_template("faq.html")
 
+@app.route("/download-guide")
+def download_guide():
+    pdf_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "RentCar_Complete_Architecture_and_Workflow_Guide.pdf")
+    if os.path.isfile(pdf_path):
+        return send_file(pdf_path, as_attachment=True, download_name="RentCar_Complete_Architecture_and_Workflow_Guide.pdf")
+    flash("Documentation PDF not found.", "error")
+    return redirect(url_for("index"))
+
 # ---------- AUTH ----------
 @app.route("/register", methods=["GET", "POST"])
 def register():
@@ -112,12 +120,15 @@ def register():
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
+    if "username" in session:
+        return redirect(url_for("index"))
     if request.method == "POST":
         username, pw = request.form.get("username", "").strip(), request.form.get("password", "")
         conn = get_connection(); cur = conn.cursor(dictionary=True)
         cur.execute("SELECT password FROM users WHERE username=%s", (username,))
         user = cur.fetchone(); cur.close(); conn.close()
         if user and check_password_hash(user["password"], pw):
+            session.pop("admin", None)   # Only 1 role at a time
             session["username"] = username
             flash(f"Welcome back, {username}!")
             return redirect(url_for("index"))
@@ -128,7 +139,7 @@ def login():
 def logout():
     session.pop("username", None)
     flash("You have been logged out.")
-    return redirect(url_for("index"))
+    return redirect(url_for("login"))
 
 DEFAULT_CAR_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="100%" height="100%">
   <rect width="600" height="400" fill="#f0f1f4"/>
@@ -400,13 +411,17 @@ def booking_invoice(booking_id):
 # ---------- ADMIN ----------
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
+    if "admin" in session:
+        return redirect(url_for("admin_dashboard"))
     if request.method == "POST":
         name, pw = request.form.get("username", "").strip(), request.form.get("password", "")
         conn = get_connection(); cur = conn.cursor(dictionary=True)
         cur.execute("SELECT password FROM admins WHERE admin_username=%s", (name,))
         row = cur.fetchone(); cur.close(); conn.close()
         if row and check_password_hash(row["password"], pw):
+            session.pop("username", None)   # Only 1 role at a time
             session["admin"] = name
+            flash(f"Logged in as Admin ({name}).")
             return redirect(url_for("admin_dashboard"))
         flash("Invalid admin username or password.", "error")
     return render_template("admin_login.html")
@@ -415,7 +430,7 @@ def admin_login():
 def admin_logout():
     session.pop("admin", None)
     flash("Admin logged out.")
-    return redirect(url_for("index"))
+    return redirect(url_for("admin_login"))
 
 @app.route("/admin")
 @admin_required
