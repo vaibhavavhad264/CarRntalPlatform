@@ -1,4 +1,4 @@
-import math, re
+import csv, io, math, os, re
 from datetime import datetime
 from decimal import Decimal
 from functools import wraps
@@ -6,7 +6,7 @@ import mysql.connector
 from flask import (Flask, render_template, request, redirect, url_for,
                    session, flash, Response)
 from werkzeug.security import generate_password_hash, check_password_hash
-from database import get_connection, seed_images, ensure_admin
+from database import get_connection, seed_images, ensure_admin, find_photo, MIMES
 
 app = Flask(__name__)
 # In production keep this in an environment variable, never hardcode it.
@@ -130,6 +130,18 @@ def logout():
     flash("You have been logged out.")
     return redirect(url_for("index"))
 
+DEFAULT_CAR_SVG = """<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="100%" height="100%">
+  <rect width="600" height="400" fill="#f0f1f4"/>
+  <path d="M120 250 L180 160 Q200 130 240 130 L380 130 Q420 130 450 165 L500 230 L530 235 Q540 240 540 255 L540 280 Q540 290 530 290 L500 290 Q485 260 450 260 Q415 260 400 290 L240 290 Q225 260 190 260 Q155 260 140 290 L90 290 Q80 290 80 280 L80 260 Q80 248 95 245 Z" fill="#ff5a36" opacity="0.85"/>
+  <circle cx="190" cy="290" r="35" fill="#222"/>
+  <circle cx="190" cy="290" r="16" fill="#fff"/>
+  <circle cx="450" cy="290" r="35" fill="#222"/>
+  <circle cx="450" cy="290" r="16" fill="#fff"/>
+  <path d="M210 165 L300 165 L300 220 L165 220 Z" fill="#ffffff" opacity="0.8"/>
+  <path d="M315 165 L415 165 L445 220 L315 220 Z" fill="#ffffff" opacity="0.8"/>
+  <text x="300" y="365" font-family="sans-serif" font-size="18" font-weight="bold" fill="#888" text-anchor="middle">RentCar Fleet</text>
+</svg>"""
+
 # ---------- CARS ----------
 @app.route("/car-image/<int:car_id>")
 def car_image(car_id):
@@ -137,7 +149,7 @@ def car_image(car_id):
     cur.execute("SELECT image, image_mime FROM car WHERE car_id=%s", (car_id,))
     row = cur.fetchone(); cur.close(); conn.close()
     if not row or not row["image"]:
-        return Response(status=404)
+        return Response(DEFAULT_CAR_SVG, mimetype="image/svg+xml")
     return Response(row["image"], mimetype=row["image_mime"])
 
 @app.route("/rentcar")
@@ -306,6 +318,85 @@ def cancel_booking(booking_id):
         cur.close(); conn.close()
     return redirect(url_for("my_bookings"))
 
+# ---------- USER PROFILE & INVOICE ----------
+@app.route("/profile", methods=["GET", "POST"])
+@login_required
+def profile():
+    username = session["username"]
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "update_email":
+            email = request.form.get("email", "").strip()
+            if not EMAIL_RE.match(email):
+                flash("Enter a valid email address.", "error")
+            else:
+                cur.execute("SELECT username FROM users WHERE email=%s AND username!=%s", (email, username))
+                if cur.fetchone():
+                    flash("This email is already registered to another account.", "error")
+                else:
+                    cur.execute("UPDATE users SET email=%s WHERE username=%s", (email, username))
+                    conn.commit()
+                    flash("Email address updated successfully!")
+        elif action == "change_password":
+            curr_pw = request.form.get("current_password", "")
+            new_pw = request.form.get("new_password", "")
+            confirm_pw = request.form.get("confirm_password", "")
+            cur.execute("SELECT password FROM users WHERE username=%s", (username,))
+            user_row = cur.fetchone()
+            if not user_row or not check_password_hash(user_row["password"], curr_pw):
+                flash("Current password is incorrect.", "error")
+            elif len(new_pw) < 6:
+                flash("New password must be at least 6 characters.", "error")
+            elif new_pw != confirm_pw:
+                flash("New passwords do not match.", "error")
+            else:
+                cur.execute("UPDATE users SET password=%s WHERE username=%s", (generate_password_hash(new_pw), username))
+                conn.commit()
+                flash("Password changed successfully!")
+
+    cur.execute("SELECT username, email, age, license FROM users WHERE username=%s", (username,))
+    user = cur.fetchone()
+    cur.execute("SELECT COUNT(*) as n, COALESCE(SUM(total_amount),0) as spent FROM bookings WHERE username=%s AND status='confirmed'", (username,))
+    stats = cur.fetchone()
+    cur.close(); conn.close()
+    return render_template("profile.html", user=user, stats=stats)
+
+@app.route("/booking/invoice/<int:booking_id>")
+def booking_invoice(booking_id):
+    is_admin = session.get("admin") is not None
+    user = session.get("username")
+    if not is_admin and not user:
+        flash("Please log in to view this invoice.", "error")
+        return redirect(url_for("login"))
+
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    cur.execute(
+        "SELECT b.*, c.specification, c.city, c.price_per_hour, u.email "
+        "FROM bookings b "
+        "JOIN car c ON c.car_id = b.car_id "
+        "JOIN users u ON u.username = b.username "
+        "WHERE b.booking_id = %s",
+        (booking_id,)
+    )
+    b = cur.fetchone()
+    cur.close(); conn.close()
+
+    if not b:
+        flash("Invoice not found.", "error")
+        return redirect(url_for("index"))
+
+    if not is_admin and b["username"] != user:
+        flash("Unauthorized access to this invoice.", "error")
+        return redirect(url_for("my_bookings"))
+
+    start = datetime.combine(b["date_start"], (datetime.min + b["start_time"]).time())
+    end = datetime.combine(b["date_end"], (datetime.min + b["end_time"]).time())
+    hours = math.ceil((end - start).total_seconds() / 3600)
+    b["hours"] = hours
+
+    return render_template("invoice.html", b=b, is_admin=is_admin)
+
 # ---------- ADMIN ----------
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
@@ -336,16 +427,386 @@ def admin_dashboard():
                 "FROM bookings WHERE status='confirmed'")
     bk = cur.fetchone()
     cur.execute("SELECT COUNT(*) AS n FROM bookings WHERE status='cancelled'"); cancelled = cur.fetchone()["n"]
-    cur.execute("SELECT username, email, age, license FROM users ORDER BY username")   # never select password hashes
+
+    # Enhanced users query
+    cur.execute(
+        "SELECT u.username, u.email, u.age, u.license, "
+        "(SELECT COUNT(*) FROM bookings b WHERE b.username=u.username) AS total_bookings, "
+        "COALESCE((SELECT SUM(total_amount) FROM bookings b WHERE b.username=u.username AND b.status='confirmed'), 0) AS total_spent "
+        "FROM users u "
+        "ORDER BY u.username"
+    )
     users = cur.fetchall()
-    cur.execute("SELECT car_id, model, city, seats, price_per_hour, ac, electric, availability, rating FROM car ORDER BY car_id")
+
+    # Enhanced cars query
+    cur.execute(
+        "SELECT c.car_id, c.model, c.specification, c.city, c.seats, c.price_per_hour, c.ac, c.electric, c.availability, c.rating, "
+        "(c.image IS NOT NULL) AS has_image, "
+        "(SELECT COUNT(*) FROM bookings b WHERE b.car_id=c.car_id) AS total_bookings, "
+        "EXISTS(SELECT 1 FROM bookings b WHERE b.car_id=c.car_id AND b.status='confirmed' "
+        "AND TIMESTAMP(b.date_start,b.start_time) <= NOW() AND TIMESTAMP(b.date_end,b.end_time) > NOW()) AS in_use "
+        "FROM car c "
+        "ORDER BY c.car_id"
+    )
     cars = cur.fetchall()
-    cur.execute("SELECT booking_id, username, model, location, date_start, start_time, date_end, end_time, "
-                "subtotal, discount_amount, total_amount, status FROM bookings ORDER BY booking_id DESC")
+
+    # Enhanced bookings query
+    cur.execute(
+        "SELECT b.booking_id, b.username, b.car_id, b.model, b.location, b.date_start, b.start_time, b.date_end, b.end_time, "
+        "b.subtotal, b.discount_amount, b.total_amount, b.status, c.city "
+        "FROM bookings b "
+        "LEFT JOIN car c ON c.car_id = b.car_id "
+        "ORDER BY b.booking_id DESC"
+    )
     bookings = cur.fetchall()
+
+    # Distinct cities
+    cur.execute("SELECT DISTINCT city FROM car ORDER BY city")
+    cities = [r["city"] for r in cur.fetchall()]
+
     cur.close(); conn.close()
+    active_tab = request.args.get("tab", "users")
     return render_template("admin_dashboard.html", users_n=users_n, cars_n=cars_n, bk=bk, cancelled=cancelled,
-                           users=users, cars=cars, bookings=bookings)
+                           users=users, cars=cars, bookings=bookings, cities=cities, active_tab=active_tab)
+
+@app.route("/admin/car/add", methods=["POST"])
+@admin_required
+def admin_add_car():
+    f = request.form
+    model = f.get("model", "").strip()
+    specification = f.get("specification", "").strip()
+    city = f.get("city", "").strip()
+    try:
+        seats = int(f.get("seats", "5"))
+        price_per_hour = Decimal(f.get("price_per_hour", "0"))
+        rating = Decimal(f.get("rating", "4.5"))
+    except (ValueError, TypeError):
+        flash("Invalid numerical values for seats, price, or rating.", "error")
+        return redirect(url_for("admin_dashboard", tab="cars"))
+
+    if not model or not city or price_per_hour <= 0:
+        flash("Model name, city, and positive price per hour are required.", "error")
+        return redirect(url_for("admin_dashboard", tab="cars"))
+
+    ac = 1 if f.get("ac") == "1" else 0
+    electric = 1 if f.get("electric") == "1" else 0
+    availability = 1 if f.get("availability", "1") == "1" else 0
+
+    image_data = None
+    image_mime = None
+    if "image" in request.files:
+        file = request.files["image"]
+        if file and file.filename != "":
+            image_data = file.read()
+            image_mime = file.mimetype or "image/jpeg"
+
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    try:
+        if not image_data:
+            photo = find_photo(model)
+            if photo:
+                with open(photo, "rb") as fh:
+                    image_data = fh.read()
+                image_mime = MIMES.get(os.path.splitext(photo)[1].lower(), "image/jpeg")
+
+        cur.execute(
+            "INSERT INTO car (model, specification, availability, seats, city, price_per_hour, ac, electric, rating, image, image_mime) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)",
+            (model, specification, availability, seats, city, price_per_hour, ac, electric, rating, image_data, image_mime)
+        )
+        conn.commit()
+        flash(f"Car '{model}' added successfully!")
+    except mysql.connector.Error as e:
+        conn.rollback()
+        app.logger.error(e)
+        flash("Database error while adding car.", "error")
+    finally:
+        cur.close(); conn.close()
+    return redirect(url_for("admin_dashboard", tab="cars"))
+
+@app.route("/admin/car/edit/<int:car_id>", methods=["POST"])
+@admin_required
+def admin_edit_car(car_id):
+    f = request.form
+    model = f.get("model", "").strip()
+    specification = f.get("specification", "").strip()
+    city = f.get("city", "").strip()
+    try:
+        seats = int(f.get("seats", "5"))
+        price_per_hour = Decimal(f.get("price_per_hour", "0"))
+        rating = Decimal(f.get("rating", "4.5"))
+    except (ValueError, TypeError):
+        flash("Invalid numerical values for seats, price, or rating.", "error")
+        return redirect(url_for("admin_dashboard", tab="cars"))
+
+    if not model or not city or price_per_hour <= 0:
+        flash("Model name, city, and positive price per hour are required.", "error")
+        return redirect(url_for("admin_dashboard", tab="cars"))
+
+    ac = 1 if f.get("ac") == "1" else 0
+    electric = 1 if f.get("electric") == "1" else 0
+    availability = 1 if f.get("availability") == "1" else 0
+
+    image_data = None
+    image_mime = None
+    if "image" in request.files:
+        file = request.files["image"]
+        if file and file.filename != "":
+            image_data = file.read()
+            image_mime = file.mimetype or "image/jpeg"
+
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    try:
+        if image_data:
+            cur.execute(
+                "UPDATE car SET model=%s, specification=%s, city=%s, seats=%s, price_per_hour=%s, "
+                "ac=%s, electric=%s, availability=%s, rating=%s, image=%s, image_mime=%s WHERE car_id=%s",
+                (model, specification, city, seats, price_per_hour, ac, electric, availability, rating, image_data, image_mime, car_id)
+            )
+        else:
+            cur.execute(
+                "UPDATE car SET model=%s, specification=%s, city=%s, seats=%s, price_per_hour=%s, "
+                "ac=%s, electric=%s, availability=%s, rating=%s WHERE car_id=%s",
+                (model, specification, city, seats, price_per_hour, ac, electric, availability, rating, car_id)
+            )
+        conn.commit()
+        flash(f"Car #{car_id} ({model}) updated successfully!")
+    except mysql.connector.Error as e:
+        conn.rollback()
+        app.logger.error(e)
+        flash("Database error while updating car.", "error")
+    finally:
+        cur.close(); conn.close()
+    return redirect(url_for("admin_dashboard", tab="cars"))
+
+@app.route("/admin/car/toggle-status/<int:car_id>", methods=["POST"])
+@admin_required
+def admin_toggle_car_status(car_id):
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT model, availability FROM car WHERE car_id=%s", (car_id,))
+        car = cur.fetchone()
+        if not car:
+            flash("Car not found.", "error")
+        else:
+            new_status = 0 if car["availability"] else 1
+            cur.execute("UPDATE car SET availability=%s WHERE car_id=%s", (new_status, car_id))
+            conn.commit()
+            state_text = "now available (in service)" if new_status else "now marked out of service"
+            flash(f"Car '{car['model']}' is {state_text}.")
+    except mysql.connector.Error as e:
+        conn.rollback()
+        app.logger.error(e)
+        flash("Database error toggling car status.", "error")
+    finally:
+        cur.close(); conn.close()
+    return redirect(url_for("admin_dashboard", tab="cars"))
+
+@app.route("/admin/car/delete/<int:car_id>", methods=["POST"])
+@admin_required
+def admin_delete_car(car_id):
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT model FROM car WHERE car_id=%s", (car_id,))
+        car = cur.fetchone()
+        if not car:
+            flash("Car not found.", "error")
+            return redirect(url_for("admin_dashboard", tab="cars"))
+
+        cur.execute(
+            "SELECT COUNT(*) AS active_count FROM bookings "
+            "WHERE car_id=%s AND status='confirmed' AND TIMESTAMP(date_end, end_time) > NOW()",
+            (car_id,)
+        )
+        active = cur.fetchone()["active_count"]
+        if active > 0:
+            flash(f"Cannot delete '{car['model']}': it has {active} active or upcoming confirmed booking(s). Deactivate it instead.", "error")
+            return redirect(url_for("admin_dashboard", tab="cars"))
+
+        cur.execute("DELETE FROM bookings WHERE car_id=%s", (car_id,))
+        cur.execute("DELETE FROM car WHERE car_id=%s", (car_id,))
+        conn.commit()
+        flash(f"Car '{car['model']}' (ID #{car_id}) was successfully deleted.")
+    except mysql.connector.Error as e:
+        conn.rollback()
+        app.logger.error(e)
+        flash("Database error while deleting car.", "error")
+    finally:
+        cur.close(); conn.close()
+    return redirect(url_for("admin_dashboard", tab="cars"))
+
+@app.route("/admin/user/toggle-license/<username>", methods=["POST"])
+@admin_required
+def admin_toggle_user_license(username):
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT license FROM users WHERE username=%s", (username,))
+        user = cur.fetchone()
+        if not user:
+            flash("User not found.", "error")
+        else:
+            new_license = 0 if user["license"] else 1
+            cur.execute("UPDATE users SET license=%s WHERE username=%s", (new_license, username))
+            conn.commit()
+            txt = "verified" if new_license else "revoked"
+            flash(f"Driving license for '{username}' has been {txt}.")
+    except mysql.connector.Error as e:
+        conn.rollback()
+        app.logger.error(e)
+        flash("Database error updating license.", "error")
+    finally:
+        cur.close(); conn.close()
+    return redirect(url_for("admin_dashboard", tab="users"))
+
+@app.route("/admin/user/reset-password/<username>", methods=["POST"])
+@admin_required
+def admin_reset_user_password(username):
+    new_pw = request.form.get("password", "")
+    if len(new_pw) < 6:
+        flash("Password must be at least 6 characters.", "error")
+        return redirect(url_for("admin_dashboard", tab="users"))
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("UPDATE users SET password=%s WHERE username=%s", (generate_password_hash(new_pw), username))
+        conn.commit()
+        flash(f"Password for user '{username}' has been reset successfully!")
+    except mysql.connector.Error as e:
+        conn.rollback()
+        app.logger.error(e)
+        flash("Database error resetting password.", "error")
+    finally:
+        cur.close(); conn.close()
+    return redirect(url_for("admin_dashboard", tab="users"))
+
+@app.route("/admin/user/delete/<username>", methods=["POST"])
+@admin_required
+def admin_delete_user(username):
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT username FROM users WHERE username=%s", (username,))
+        user = cur.fetchone()
+        if not user:
+            flash("User not found.", "error")
+            return redirect(url_for("admin_dashboard", tab="users"))
+
+        cur.execute(
+            "SELECT COUNT(*) AS active_count FROM bookings "
+            "WHERE username=%s AND status='confirmed' AND TIMESTAMP(date_end, end_time) > NOW()",
+            (username,)
+        )
+        active = cur.fetchone()["active_count"]
+        if active > 0:
+            flash(f"Cannot delete user '{username}': they have {active} active or upcoming confirmed booking(s).", "error")
+            return redirect(url_for("admin_dashboard", tab="users"))
+
+        cur.execute("DELETE FROM bookings WHERE username=%s", (username,))
+        cur.execute("DELETE FROM users WHERE username=%s", (username,))
+        conn.commit()
+        flash(f"User '{username}' was successfully deleted.")
+    except mysql.connector.Error as e:
+        conn.rollback()
+        app.logger.error(e)
+        flash("Database error deleting user.", "error")
+    finally:
+        cur.close(); conn.close()
+    return redirect(url_for("admin_dashboard", tab="users"))
+
+@app.route("/admin/booking/cancel/<int:booking_id>", methods=["POST"])
+@admin_required
+def admin_cancel_booking(booking_id):
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    try:
+        cur.execute("SELECT booking_id, status, username FROM bookings WHERE booking_id=%s", (booking_id,))
+        b = cur.fetchone()
+        if not b:
+            flash("Booking not found.", "error")
+        elif b["status"] == "cancelled":
+            flash("Booking is already cancelled.", "error")
+        else:
+            cur.execute("UPDATE bookings SET status='cancelled' WHERE booking_id=%s", (booking_id,))
+            conn.commit()
+            flash(f"Booking #{booking_id} for '{b['username']}' was cancelled by admin.")
+    except mysql.connector.Error as e:
+        conn.rollback()
+        app.logger.error(e)
+        flash("Database error cancelling booking.", "error")
+    finally:
+        cur.close(); conn.close()
+    return redirect(url_for("admin_dashboard", tab="bookings"))
+
+@app.route("/admin/export/bookings")
+@admin_required
+def admin_export_bookings():
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    cur.execute(
+        "SELECT b.booking_id, b.username, b.car_id, b.model, b.location, b.date_start, b.start_time, "
+        "b.date_end, b.end_time, b.subtotal, b.discount_amount, b.total_amount, b.status "
+        "FROM bookings b ORDER BY b.booking_id DESC"
+    )
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+
+    si = io.StringIO()
+    writer = csv.writer(si)
+    writer.writerow(["Booking ID", "Username", "Car ID", "Car Model", "Location", "Start Date", "Start Time",
+                     "End Date", "End Time", "Subtotal (INR)", "Discount (INR)", "Total (INR)", "Status"])
+    for r in rows:
+        writer.writerow([r["booking_id"], r["username"], r["car_id"], r["model"], r["location"],
+                         str(r["date_start"]), str(r["start_time"]), str(r["date_end"]), str(r["end_time"]),
+                         r["subtotal"], r["discount_amount"], r["total_amount"], r["status"]])
+    return Response(
+        si.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=rentcar_bookings.csv"}
+    )
+
+@app.route("/admin/export/users")
+@admin_required
+def admin_export_users():
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    cur.execute(
+        "SELECT u.username, u.email, u.age, u.license, "
+        "(SELECT COUNT(*) FROM bookings b WHERE b.username=u.username) AS total_bookings, "
+        "COALESCE((SELECT SUM(total_amount) FROM bookings b WHERE b.username=u.username AND b.status='confirmed'), 0) AS total_spent "
+        "FROM users u ORDER BY u.username"
+    )
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+
+    si = io.StringIO()
+    writer = csv.writer(si)
+    writer.writerow(["Username", "Email", "Age", "License Verified", "Total Bookings", "Total Spent (INR)"])
+    for r in rows:
+        writer.writerow([r["username"], r["email"], r["age"], "Yes" if r["license"] else "No", r["total_bookings"], r["total_spent"]])
+    return Response(
+        si.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=rentcar_users.csv"}
+    )
+
+@app.route("/admin/export/cars")
+@admin_required
+def admin_export_cars():
+    conn = get_connection(); cur = conn.cursor(dictionary=True)
+    cur.execute(
+        "SELECT car_id, model, specification, city, seats, price_per_hour, ac, electric, availability, rating "
+        "FROM car ORDER BY car_id"
+    )
+    rows = cur.fetchall()
+    cur.close(); conn.close()
+
+    si = io.StringIO()
+    writer = csv.writer(si)
+    writer.writerow(["Car ID", "Model", "Specification", "City", "Seats", "Price Per Hour (INR)", "AC", "Electric", "In Service", "Rating"])
+    for r in rows:
+        writer.writerow([r["car_id"], r["model"], r["specification"], r["city"], r["seats"], r["price_per_hour"],
+                         "AC" if r["ac"] else "Non-AC", "Electric" if r["electric"] else "Non-electric",
+                         "Yes" if r["availability"] else "No", r["rating"]])
+    return Response(
+        si.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": "attachment; filename=rentcar_cars.csv"}
+    )
 
 if __name__ == "__main__":
     try:

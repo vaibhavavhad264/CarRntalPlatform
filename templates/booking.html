@@ -1,37 +1,97 @@
-{% extends "base.html" %}
-{% block title %}Booking{% endblock %}
-{% block content %}
+{% extends "base.html" %} {% block title %}Booking{% endblock %} {% block
+content %}
 <section class="booking-section">
-  <div class="booking-header"><p class="eyebrow">BOOKING</p><h1>Book your <span>{{ car.model }}</span></h1></div>
+  <div class="booking-header">
+    <p class="eyebrow">BOOKING</p>
+    <h1>Book your <span>{{ car.model }}</span></h1>
+  </div>
   <div class="booking-layout">
-    <form class="booking-form" id="bookingForm" method="post" action="{{ url_for('confirm_booking') }}"
-          data-price="{{ car.price_per_hour }}" data-first="{{ 1 if first else 0 }}">
+    <form
+      class="booking-form"
+      id="bookingForm"
+      method="post"
+      action="{{ url_for('confirm_booking') }}"
+      data-price="{{ car.price_per_hour }}"
+      data-first="{{ 1 if first else 0 }}"
+    >
       <h2>Rental details</h2>
-      {% if first %}<div class="discount-note">🎁 First booking: 30% discount is applied automatically!</div>{% endif %}
-      <input type="hidden" name="car_id" value="{{ car.car_id }}">
-      <div class="form-group"><label>Pick-up location</label><input name="location" value="{{ car.city }}" required></div>
+      {% if first %}
+      <div class="discount-note">
+        🎁 First booking: 30% discount is applied automatically!
+      </div>
+      {% endif %}
+      <input type="hidden" name="car_id" value="{{ car.car_id }}" />
+      <div class="form-group">
+        <label>Pick-up location</label
+        ><input name="location" value="{{ car.city }}" required />
+      </div>
       <div class="form-grid">
-        <div class="form-group"><label>Start date</label><input type="date" name="start_date" min="{{ today }}" required></div>
-        <div class="form-group"><label>Start time</label><input type="time" name="start_time" required></div>
-        <div class="form-group"><label>End date</label><input type="date" name="end_date" min="{{ today }}" required></div>
-        <div class="form-group"><label>End time</label><input type="time" name="end_time" required></div>
+        <div class="form-group">
+          <label>Start date</label
+          ><input type="date" name="start_date" min="{{ today }}" required />
+        </div>
+        <div class="form-group">
+          <label>Start time</label
+          ><input type="time" name="start_time" required />
+        </div>
+        <div class="form-group">
+          <label>End date</label
+          ><input type="date" name="end_date" min="{{ today }}" required />
+        </div>
+        <div class="form-group">
+          <label>End time</label><input type="time" name="end_time" required />
+        </div>
       </div>
       <p class="estimate-msg" id="estimate"></p>
-      <button class="btn btn-primary btn-large btn-full" type="submit">Review booking →</button>
+      <button class="btn btn-primary btn-large btn-full" type="submit">
+        Review booking →
+      </button>
     </form>
     <aside class="booking-summary">
       <h2>Summary</h2>
-      <div class="booking-car"><img src="{{ url_for('car_image', car_id=car.car_id) }}" alt="{{ car.model }}">
-        <div><strong>{{ car.model }}</strong><p class="car-meta">{{ car.specification }}</p><span class="stars">★ {{ car.rating }}</span></div></div>
-      <div class="summary-row"><span>City</span><strong>{{ car.city }}</strong></div>
-      <div class="summary-row"><span>Seats</span><strong>{{ car.seats }}</strong></div>
-      <div class="summary-row"><span>Air conditioning</span><strong>{{ 'AC' if car.ac else 'Non-AC' }}</strong></div>
-      <div class="summary-row"><span>Fuel type</span><strong>{{ 'Electric' if car.electric else 'Non-electric' }}</strong></div>
-      <div class="summary-row"><span>Price per hour</span><strong>₹{{ '{:,.0f}'.format(car.price_per_hour) }}</strong></div>
-      <div class="summary-row"><span>Rental duration</span><strong id="sumHours">—</strong></div>
-      <div class="summary-row"><span>Subtotal</span><strong id="sumSub">—</strong></div>
-      {% if first %}<div class="summary-row disc"><span>First-booking discount (30%)</span><strong id="sumDisc">—</strong></div>{% endif %}
-      <div class="summary-total"><span>Estimated total</span><strong id="sumTotal">—</strong></div>
+      <div class="booking-car">
+        <img
+          src="{{ url_for('car_image', car_id=car.car_id) }}"
+          alt="{{ car.model }}"
+        />
+        <div>
+          <strong>{{ car.model }}</strong>
+          <p class="car-meta">{{ car.specification }}</p>
+          <span class="stars">★ {{ car.rating }}</span>
+        </div>
+      </div>
+      <div class="summary-row">
+        <span>City</span><strong>{{ car.city }}</strong>
+      </div>
+      <div class="summary-row">
+        <span>Seats</span><strong>{{ car.seats }}</strong>
+      </div>
+      <div class="summary-row">
+        <span>Air conditioning</span
+        ><strong>{{ 'AC' if car.ac else 'Non-AC' }}</strong>
+      </div>
+      <div class="summary-row">
+        <span>Fuel type</span
+        ><strong>{{ 'Electric' if car.electric else 'Non-electric' }}</strong>
+      </div>
+      <div class="summary-row">
+        <span>Price per hour</span
+        ><strong>₹{{ '{:,.0f}'.format(car.price_per_hour) }}</strong>
+      </div>
+      <div class="summary-row">
+        <span>Rental duration</span><strong id="sumHours">—</strong>
+      </div>
+      <div class="summary-row">
+        <span>Subtotal</span><strong id="sumSub">—</strong>
+      </div>
+      {% if first %}
+      <div class="summary-row disc">
+        <span>First-booking discount (30%)</span><strong id="sumDisc">—</strong>
+      </div>
+      {% endif %}
+      <div class="summary-total">
+        <span>Estimated total</span><strong id="sumTotal">—</strong>
+      </div>
     </aside>
   </div>
 </section>

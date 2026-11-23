@@ -20,9 +20,12 @@
           <p>{{ b.date_start.strftime('%d %b %Y') }}, {{ hm(b.start_time) }} → {{ b.date_end.strftime('%d %b %Y') }}, {{ hm(b.end_time) }}</p>
           <p><strong>₹{{ '{:,.2f}'.format(b.total_amount) }}</strong>{% if b.discount_amount > 0 %} · 30% first-booking discount applied{% endif %}</p>
         </div>
-        <div class="side"><span class="booking-status {{ b.cls }}">{{ b.label }}</span>
+        <div class="side">
+          <span class="booking-status {{ b.cls }}">{{ b.label }}</span>
+          <a class="btn btn-outline btn-sm" href="{{ url_for('booking_invoice', booking_id=b.booking_id) }}" target="_blank">View Invoice</a>
           {% if b.can_cancel %}<form method="post" action="{{ url_for('cancel_booking', booking_id=b.booking_id) }}" data-confirm="Cancel this booking?">
-            <button class="btn btn-danger btn-sm" type="submit">Cancel booking</button></form>{% endif %}</div>
+            <button class="btn btn-danger btn-sm" type="submit">Cancel booking</button></form>{% endif %}
+        </div>
       </div>
     {% endfor %}</div>
   {% endif %}

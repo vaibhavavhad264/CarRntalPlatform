@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% from "_macros.html" import hm %}
+{% block title %}Invoice #{{ b.booking_id }}{% endblock %}
+{% block content %}
+<section class="dashboard-section no-print-bg">
+  <div class="invoice-container">
+    <div class="invoice-top-actions no-print">
+      <a class="btn btn-outline btn-sm" href="{{ url_for('admin_dashboard', tab='bookings') if is_admin else url_for('my_bookings') }}">← Back to Bookings</a>
+      <button class="btn btn-primary btn-sm" type="button" onclick="window.print()">🖨 Print Invoice</button>
+    </div>
+
+    <div class="invoice-paper">
+      <div class="invoice-head">
+        <div>
+          <div class="logo">Rent<span>Car</span></div>
+          <p class="invoice-subtext">Official Rental Receipt & Tax Invoice</p>
+          <p class="invoice-corp">RentCar Mobility Solutions Ltd.<br>support@rentcar.com | +91 89875 64321</p>
+        </div>
+        <div class="invoice-meta">
+          <h2>INVOICE</h2>
+          <p><strong>Invoice No:</strong> #RC-{{ '%05d' % b.booking_id }}</p>
+          <p><strong>Booking ID:</strong> #{{ b.booking_id }}</p>
+          <p><strong>Date:</strong> {{ b.date_start.strftime('%d %B %Y') }}</p>
+          <p><strong>Status:</strong> <span class="booking-status {{ 'cancelled' if b.status=='cancelled' else 'done' }}">{{ b.status|capitalize }}</span></p>
+        </div>
+      </div>
+
+      <div class="invoice-billing-grid">
+        <div class="invoice-col">
+          <h4>Customer Details</h4>
+          <p><strong>{{ b.username }}</strong></p>
+          <p>{{ b.email }}</p>
+        </div>
+        <div class="invoice-col">
+          <h4>Trip & Location</h4>
+          <p><strong>Pick-up & Drop:</strong> {{ b.location }} ({{ b.city }})</p>
+          <p><strong>Start:</strong> {{ b.date_start.strftime('%d %b %Y') }}, {{ hm(b.start_time) }}</p>
+          <p><strong>End:</strong> {{ b.date_end.strftime('%d %b %Y') }}, {{ hm(b.end_time) }}</p>
+          <p><strong>Duration:</strong> {{ b.hours }} hour{{ 's' if b.hours != 1 else '' }}</p>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="margin: 24px 0;">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>ITEM DESCRIPTION</th>
+              <th>RATE / HR</th>
+              <th>HOURS</th>
+              <th style="text-align: right;">AMOUNT</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>
+                <strong>{{ b.model }}</strong><br>
+                <small style="color:var(--muted)">{{ b.specification }} · City: {{ b.city }} · Hub: {{ b.location }}</small>
+              </td>
+              <td>₹{{ '{:,.2f}'.format(b.price_per_hour) }}</td>
+              <td>{{ b.hours }}</td>
+              <td style="text-align: right;">₹{{ '{:,.2f}'.format(b.subtotal) }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="invoice-totals">
+        <div class="invoice-total-row">
+          <span>Subtotal:</span>
+          <strong>₹{{ '{:,.2f}'.format(b.subtotal) }}</strong>
+        </div>
+        {% if b.discount_amount > 0 %}
+        <div class="invoice-total-row" style="color: #299b45;">
+          <span>First-Booking Offer (30%):</span>
+          <strong>− ₹{{ '{:,.2f}'.format(b.discount_amount) }}</strong>
+        </div>
+        {% endif %}
+        <div class="invoice-total-row grand-total">
+          <span>Total Paid:</span>
+          <strong>₹{{ '{:,.2f}'.format(b.total_amount) }}</strong>
+        </div>
+      </div>
+
+      <div class="invoice-footer-note">
+        <p>Thank you for choosing RentCar! Drive safe. For emergency assistance or queries, please contact support@rentcar.com or call +91 89875 64321.</p>
+      </div>
+    </div>
+  </div>
+</section>
+{% endblock %}

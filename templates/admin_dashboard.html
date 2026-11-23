@@ -3,7 +3,10 @@
 {% block title %}Admin Dashboard{% endblock %}
 {% block content %}
 <section class="dashboard-section">
-  <div class="dashboard-heading"><h1>Admin <span>dashboard</span></h1></div>
+  <div class="dashboard-heading">
+    <h1>Admin <span>dashboard</span></h1>
+  </div>
+
   <div class="stat-grid">
     <div class="stat"><small>Registered users</small><strong>{{ users_n }}</strong></div>
     <div class="stat"><small>Revenue generated</small><strong>₹{{ '{:,.2f}'.format(bk.revenue) }}</strong></div>
@@ -12,26 +15,517 @@
     <div class="stat"><small>Cancelled bookings</small><strong>{{ cancelled }}</strong></div>
     <div class="stat"><small>Discounts given</small><strong>₹{{ '{:,.2f}'.format(bk.disc) }}</strong></div>
   </div>
-  <div class="tabs"><button class="tab-btn on" data-tab="t-users">Registered users</button>
-    <button class="tab-btn" data-tab="t-cars">Cars</button><button class="tab-btn" data-tab="t-bookings">Bookings</button></div>
 
-  <div class="tab-panel on" id="t-users"><div class="table-wrap"><table class="data-table">
-    <tr><th>USERNAME</th><th>EMAIL</th><th>AGE</th><th>LICENSE</th></tr>
-    {% for u in users %}<tr><td>{{ u.username }}</td><td>{{ u.email }}</td><td>{{ u.age }}</td><td>{{ 'Yes' if u.license else 'No' }}</td></tr>
-    {% else %}<tr><td colspan="4">No registered users yet.</td></tr>{% endfor %}</table></div></div>
+  <div class="tabs">
+    <button class="tab-btn {{ 'on' if active_tab == 'users' else '' }}" data-tab="t-users">Registered users ({{ users|length }})</button>
+    <button class="tab-btn {{ 'on' if active_tab == 'cars' else '' }}" data-tab="t-cars">Cars fleet ({{ cars|length }})</button>
+    <button class="tab-btn {{ 'on' if active_tab == 'bookings' else '' }}" data-tab="t-bookings">Bookings ({{ bookings|length }})</button>
+  </div>
 
-  <div class="tab-panel" id="t-cars"><div class="table-wrap"><table class="data-table">
-    <tr><th>ID</th><th>MODEL</th><th>CITY</th><th>SEATS</th><th>₹/HOUR</th><th>AC</th><th>FUEL</th><th>IN SERVICE</th><th>RATING</th></tr>
-    {% for c in cars %}<tr><td>{{ c.car_id }}</td><td>{{ c.model }}</td><td>{{ c.city }}</td><td>{{ c.seats }}</td>
-      <td>{{ '{:,.0f}'.format(c.price_per_hour) }}</td><td>{{ 'AC' if c.ac else 'Non-AC' }}</td>
-      <td>{{ 'Electric' if c.electric else 'Non-electric' }}</td><td>{{ 'Yes' if c.availability else 'No' }}</td><td>{{ c.rating }}</td></tr>{% endfor %}</table></div></div>
+  <!-- TAB 1: USERS -->
+  <div class="tab-panel {{ 'on' if active_tab == 'users' else '' }}" id="t-users">
+    <div class="table-toolbar">
+      <div class="toolbar-group">
+        <input type="text" id="userSearchInput" class="table-search" placeholder="Search by username or email..." oninput="filterUsersTable()">
+        <select id="userLicenseFilter" class="table-filter-sel" onchange="filterUsersTable()">
+          <option value="">All license statuses</option>
+          <option value="yes">Licensed</option>
+          <option value="no">No License</option>
+        </select>
+      </div>
+      <div class="toolbar-group">
+        <a class="btn btn-outline btn-sm" href="{{ url_for('admin_export_users') }}">⬇ Export Users CSV</a>
+      </div>
+    </div>
 
-  <div class="tab-panel" id="t-bookings"><div class="table-wrap"><table class="data-table">
-    <tr><th>ID</th><th>USER</th><th>CAR</th><th>LOCATION</th><th>START</th><th>END</th><th>SUBTOTAL</th><th>DISCOUNT</th><th>TOTAL</th><th>STATUS</th></tr>
-    {% for b in bookings %}<tr><td>#{{ b.booking_id }}</td><td>{{ b.username }}</td><td>{{ b.model }}</td><td>{{ b.location }}</td>
-      <td>{{ b.date_start.strftime('%d %b %Y') }} {{ hm(b.start_time) }}</td><td>{{ b.date_end.strftime('%d %b %Y') }} {{ hm(b.end_time) }}</td>
-      <td>₹{{ '{:,.2f}'.format(b.subtotal) }}</td><td>₹{{ '{:,.2f}'.format(b.discount_amount) }}</td><td>₹{{ '{:,.2f}'.format(b.total_amount) }}</td>
-      <td><span class="booking-status {{ 'cancelled' if b.status=='cancelled' else 'done' }}">{{ b.status|capitalize }}</span></td></tr>
-    {% else %}<tr><td colspan="10">No bookings yet.</td></tr>{% endfor %}</table></div></div>
+    <div class="table-wrap">
+      <table class="data-table" id="usersTable">
+        <thead>
+          <tr>
+            <th>USERNAME</th>
+            <th>EMAIL</th>
+            <th>AGE</th>
+            <th>LICENSE</th>
+            <th>BOOKINGS</th>
+            <th>TOTAL SPENT</th>
+            <th>ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr data-username="{{ u.username|lower }}" data-email="{{ u.email|lower }}" data-license="{{ 'yes' if u.license else 'no' }}">
+            <td><strong>{{ u.username }}</strong></td>
+            <td>{{ u.email }}</td>
+            <td>{{ u.age }} yrs</td>
+            <td>
+              <span class="booking-status {{ 'done' if u.license else 'cancelled' }}">
+                {{ 'Verified' if u.license else 'No license' }}
+              </span>
+            </td>
+            <td>{{ u.total_bookings }}</td>
+            <td>₹{{ '{:,.2f}'.format(u.total_spent) }}</td>
+            <td>
+              <div class="action-btns">
+                <form method="post" action="{{ url_for('admin_toggle_user_license', username=u.username) }}" style="display:inline;">
+                  <button class="btn btn-outline btn-sm" type="submit" title="Toggle driving license">
+                    {{ 'Revoke' if u.license else 'Verify' }}
+                  </button>
+                </form>
+                <button class="btn btn-light btn-sm" type="button" onclick="openResetPasswordModal('{{ u.username }}')">Reset Password</button>
+                <form method="post" action="{{ url_for('admin_delete_user', username=u.username) }}" style="display:inline;" data-confirm="Permanently delete user '{{ u.username }}'?">
+                  <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7">No registered users found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 2: CARS -->
+  <div class="tab-panel {{ 'on' if active_tab == 'cars' else '' }}" id="t-cars">
+    <div class="table-toolbar">
+      <div class="toolbar-group">
+        <input type="text" id="carSearchInput" class="table-search" placeholder="Search by model, specs, city..." oninput="filterCarsTable()">
+        <select id="carCityFilter" class="table-filter-sel" onchange="filterCarsTable()">
+          <option value="">All Cities</option>
+          {% for c in cities %}
+          <option value="{{ c|lower }}">{{ c }}</option>
+          {% endfor %}
+        </select>
+        <select id="carStatusFilter" class="table-filter-sel" onchange="filterCarsTable()">
+          <option value="">All Availability</option>
+          <option value="in_service">In Service</option>
+          <option value="out_of_service">Out of Service</option>
+        </select>
+      </div>
+      <div class="toolbar-group">
+        <button class="btn btn-primary btn-sm" type="button" onclick="openAddCarModal()">+ Add New Car</button>
+        <a class="btn btn-outline btn-sm" href="{{ url_for('admin_export_cars') }}">⬇ Export Cars CSV</a>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="carsTable">
+        <thead>
+          <tr>
+            <th>PHOTO</th>
+            <th>ID</th>
+            <th>MODEL</th>
+            <th>CITY</th>
+            <th>SEATS</th>
+            <th>₹/HOUR</th>
+            <th>AC</th>
+            <th>FUEL</th>
+            <th>IN SERVICE</th>
+            <th>RATING</th>
+            <th>BOOKINGS</th>
+            <th>ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in cars %}
+          <tr data-model="{{ c.model|lower }}" data-specs="{{ (c.specification or '')|lower }}" data-city="{{ c.city|lower }}" data-status="{{ 'in_service' if c.availability else 'out_of_service' }}">
+            <td>
+              <img class="table-thumb" src="{{ url_for('car_image', car_id=c.car_id) }}" alt="{{ c.model }}">
+            </td>
+            <td>#{{ c.car_id }}</td>
+            <td>
+              <strong>{{ c.model }}</strong><br>
+              <small style="color:var(--muted)">{{ c.specification or 'No specs' }}</small>
+            </td>
+            <td>{{ c.city }}</td>
+            <td>{{ c.seats }}</td>
+            <td>₹{{ '{:,.0f}'.format(c.price_per_hour) }}</td>
+            <td>{{ 'AC' if c.ac else 'Non-AC' }}</td>
+            <td>{{ 'Electric' if c.electric else 'Petrol/Diesel' }}</td>
+            <td>
+              {% if c.availability %}
+                <span class="booking-status done">In Service</span>
+                {% if c.in_use %}<br><span class="booking-status ongoing" style="font-size:11px; margin-top:2px;">In Use Now</span>{% endif %}
+              {% else %}
+                <span class="booking-status cancelled">Out of Service</span>
+              {% endif %}
+            </td>
+            <td>⭐ {{ c.rating }}</td>
+            <td>{{ c.total_bookings }}</td>
+            <td>
+              <div class="action-btns">
+                <button class="btn btn-outline btn-sm" type="button" onclick='openEditCarModal({{ {
+                  "car_id": c.car_id,
+                  "model": c.model,
+                  "specification": c.specification or "",
+                  "city": c.city,
+                  "seats": c.seats,
+                  "price_per_hour": c.price_per_hour|float,
+                  "rating": c.rating|float if c.rating else 4.5,
+                  "ac": 1 if c.ac else 0,
+                  "electric": 1 if c.electric else 0,
+                  "availability": 1 if c.availability else 0
+                }|tojson|safe }})'>Edit</button>
+
+                <form method="post" action="{{ url_for('admin_toggle_car_status', car_id=c.car_id) }}" style="display:inline;">
+                  <button class="btn btn-light btn-sm" type="submit" title="Toggle active status">
+                    {{ 'Deactivate' if c.availability else 'Activate' }}
+                  </button>
+                </form>
+
+                <form method="post" action="{{ url_for('admin_delete_car', car_id=c.car_id) }}" style="display:inline;" data-confirm="Permanently delete car '{{ c.model }}' (ID #{{ c.car_id }})? This cannot be undone.">
+                  <button class="btn btn-danger btn-sm" type="submit">Delete</button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="12">No cars in fleet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 3: BOOKINGS -->
+  <div class="tab-panel {{ 'on' if active_tab == 'bookings' else '' }}" id="t-bookings">
+    <div class="table-toolbar">
+      <div class="toolbar-group">
+        <input type="text" id="bookingSearchInput" class="table-search" placeholder="Search by booking ID, user, car model..." oninput="filterBookingsTable()">
+        <select id="bookingStatusFilter" class="table-filter-sel" onchange="filterBookingsTable()">
+          <option value="">All Statuses</option>
+          <option value="confirmed">Confirmed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
+      </div>
+      <div class="toolbar-group">
+        <a class="btn btn-outline btn-sm" href="{{ url_for('admin_export_bookings') }}">⬇ Export Bookings CSV</a>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="bookingsTable">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>USER</th>
+            <th>CAR</th>
+            <th>LOCATION</th>
+            <th>START</th>
+            <th>END</th>
+            <th>SUBTOTAL</th>
+            <th>DISCOUNT</th>
+            <th>TOTAL</th>
+            <th>STATUS</th>
+            <th>ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in bookings %}
+          <tr data-id="{{ b.booking_id }}" data-user="{{ b.username|lower }}" data-model="{{ b.model|lower }}" data-location="{{ b.location|lower }}" data-status="{{ b.status|lower }}">
+            <td><strong>#{{ b.booking_id }}</strong></td>
+            <td>{{ b.username }}</td>
+            <td>{{ b.model }}</td>
+            <td>{{ b.location }}</td>
+            <td>{{ b.date_start.strftime('%d %b %Y') }} {{ hm(b.start_time) }}</td>
+            <td>{{ b.date_end.strftime('%d %b %Y') }} {{ hm(b.end_time) }}</td>
+            <td>₹{{ '{:,.2f}'.format(b.subtotal) }}</td>
+            <td>₹{{ '{:,.2f}'.format(b.discount_amount) }}</td>
+            <td><strong>₹{{ '{:,.2f}'.format(b.total_amount) }}</strong></td>
+            <td>
+              <span class="booking-status {{ 'cancelled' if b.status=='cancelled' else 'done' }}">
+                {{ b.status|capitalize }}
+              </span>
+            </td>
+            <td>
+              <div class="action-btns">
+                <a class="btn btn-outline btn-sm" href="{{ url_for('booking_invoice', booking_id=b.booking_id) }}" target="_blank">Invoice</a>
+                {% if b.status == 'confirmed' %}
+                <form method="post" action="{{ url_for('admin_cancel_booking', booking_id=b.booking_id) }}" style="display:inline;" data-confirm="Cancel booking #{{ b.booking_id }} for '{{ b.username }}'?">
+                  <button class="btn btn-danger btn-sm" type="submit">Cancel</button>
+                </form>
+                {% endif %}
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="11">No bookings found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </section>
+
+<!-- MODAL: ADD CAR -->
+<div class="modal-overlay" id="addCarModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Add New Car to Fleet</h3>
+      <button type="button" class="modal-close" onclick="closeModal('addCarModal')" aria-label="Close">×</button>
+    </div>
+    <form method="post" action="{{ url_for('admin_add_car') }}" enctype="multipart/form-data">
+      <div class="form-group">
+        <label>Model Name *</label>
+        <input type="text" name="model" required placeholder="e.g. Hyundai Creta, Toyota Innova">
+      </div>
+      <div class="form-group">
+        <label>Specification</label>
+        <input type="text" name="specification" placeholder="e.g. 1.5L Petrol Automatic SUV, Sunroof">
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>City *</label>
+          <input type="text" name="city" list="cityDatalist" required placeholder="City name">
+          <datalist id="cityDatalist">
+            {% for c in cities %}
+            <option value="{{ c }}">
+            {% endfor %}
+          </datalist>
+        </div>
+        <div class="form-group">
+          <label>Seats *</label>
+          <input type="number" name="seats" min="2" max="18" value="5" required>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Price per hour (₹) *</label>
+          <input type="number" name="price_per_hour" step="0.01" min="1" required placeholder="e.g. 450.00">
+        </div>
+        <div class="form-group">
+          <label>Rating (1.0 to 5.0)</label>
+          <input type="number" name="rating" step="0.1" min="1.0" max="5.0" value="4.5" required>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Air Conditioning</label>
+          <select name="ac">
+            <option value="1">AC (Included)</option>
+            <option value="0">Non-AC</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Fuel / Powertrain</label>
+          <select name="electric">
+            <option value="0">Petrol / Diesel</option>
+            <option value="1">⚡ Electric (EV)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Fleet Service Status</label>
+        <select name="availability">
+          <option value="1">In Service (Available to Book)</option>
+          <option value="0">Out of Service (Unavailable)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Car Photo (Optional)</label>
+        <input type="file" name="image" accept="image/*" style="padding: 10px 14px; height: auto;">
+        <small style="color:var(--muted); display:block; margin-top:4px;">Upload JPG, PNG, or WebP. If left blank, RentCar auto-matches a photo or shows a sleek placeholder.</small>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('addCarModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Add Car to Fleet</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: EDIT CAR -->
+<div class="modal-overlay" id="editCarModal">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h3>Edit Car Details</h3>
+      <button type="button" class="modal-close" onclick="closeModal('editCarModal')" aria-label="Close">×</button>
+    </div>
+    <form id="editCarForm" method="post" action="" enctype="multipart/form-data">
+      <input type="hidden" id="edit_car_id" name="car_id">
+      <div class="form-group">
+        <label>Model Name *</label>
+        <input type="text" id="edit_model" name="model" required>
+      </div>
+      <div class="form-group">
+        <label>Specification</label>
+        <input type="text" id="edit_specification" name="specification">
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>City *</label>
+          <input type="text" id="edit_city" name="city" list="cityDatalist" required>
+        </div>
+        <div class="form-group">
+          <label>Seats *</label>
+          <input type="number" id="edit_seats" name="seats" min="2" max="18" required>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Price per hour (₹) *</label>
+          <input type="number" id="edit_price" name="price_per_hour" step="0.01" min="1" required>
+        </div>
+        <div class="form-group">
+          <label>Rating (1.0 to 5.0)</label>
+          <input type="number" id="edit_rating" name="rating" step="0.1" min="1.0" max="5.0" required>
+        </div>
+      </div>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Air Conditioning</label>
+          <select id="edit_ac" name="ac">
+            <option value="1">AC (Included)</option>
+            <option value="0">Non-AC</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Fuel / Powertrain</label>
+          <select id="edit_electric" name="electric">
+            <option value="0">Petrol / Diesel</option>
+            <option value="1">⚡ Electric (EV)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Fleet Service Status</label>
+        <select id="edit_availability" name="availability">
+          <option value="1">In Service (Available to Book)</option>
+          <option value="0">Out of Service (Unavailable)</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Replace Photo (Optional)</label>
+        <input type="file" name="image" accept="image/*" style="padding: 10px 14px; height: auto;">
+        <small style="color:var(--muted); display:block; margin-top:4px;">Leave empty to keep the existing photo.</small>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('editCarModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL: RESET PASSWORD -->
+<div class="modal-overlay" id="resetPasswordModal">
+  <div class="modal-box" style="max-width: 460px;">
+    <div class="modal-header">
+      <h3>Reset User Password</h3>
+      <button type="button" class="modal-close" onclick="closeModal('resetPasswordModal')" aria-label="Close">×</button>
+    </div>
+    <form id="resetPasswordForm" method="post" action="">
+      <p style="margin-bottom: 16px; font-size:14px; color:var(--muted);">
+        Set a new password for user: <strong id="resetUsernameDisplay" style="color:var(--text);"></strong>
+      </p>
+      <div class="form-group">
+        <label>New Password (min 6 characters) *</label>
+        <input type="password" name="password" minlength="6" required placeholder="Enter new password">
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn btn-outline" onclick="closeModal('resetPasswordModal')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Update Password</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+// Modal controls
+function openModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.add('open');
+}
+function closeModal(id) {
+  const el = document.getElementById(id);
+  if (el) el.classList.remove('open');
+}
+function openAddCarModal() {
+  openModal('addCarModal');
+}
+function openEditCarModal(car) {
+  document.getElementById('editCarForm').action = '/admin/car/edit/' + car.car_id;
+  document.getElementById('edit_car_id').value = car.car_id;
+  document.getElementById('edit_model').value = car.model;
+  document.getElementById('edit_specification').value = car.specification || '';
+  document.getElementById('edit_city').value = car.city;
+  document.getElementById('edit_seats').value = car.seats;
+  document.getElementById('edit_price').value = car.price_per_hour;
+  document.getElementById('edit_rating').value = car.rating;
+  document.getElementById('edit_ac').value = car.ac ? '1' : '0';
+  document.getElementById('edit_electric').value = car.electric ? '1' : '0';
+  document.getElementById('edit_availability').value = car.availability ? '1' : '0';
+  openModal('editCarModal');
+}
+function openResetPasswordModal(username) {
+  document.getElementById('resetPasswordForm').action = '/admin/user/reset-password/' + encodeURIComponent(username);
+  document.getElementById('resetUsernameDisplay').textContent = username;
+  openModal('resetPasswordModal');
+}
+
+// Close modal on click outside box or pressing ESC
+document.querySelectorAll('.modal-overlay').forEach(function(ov) {
+  ov.addEventListener('click', function(e) {
+    if (e.target === ov) ov.classList.remove('open');
+  });
+});
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.modal-overlay.open').forEach(function(ov) {
+      ov.classList.remove('open');
+    });
+  }
+});
+
+// Live filter for Users table
+function filterUsersTable() {
+  const q = (document.getElementById('userSearchInput').value || '').toLowerCase().trim();
+  const lic = document.getElementById('userLicenseFilter').value;
+  const rows = document.querySelectorAll('#usersTable tbody tr');
+  rows.forEach(function(r) {
+    const username = r.getAttribute('data-username') || '';
+    const email = r.getAttribute('data-email') || '';
+    const rLic = r.getAttribute('data-license') || '';
+    const matchText = !q || username.includes(q) || email.includes(q);
+    const matchLic = !lic || rLic === lic;
+    r.style.display = (matchText && matchLic) ? '' : 'none';
+  });
+}
+
+// Live filter for Cars table
+function filterCarsTable() {
+  const q = (document.getElementById('carSearchInput').value || '').toLowerCase().trim();
+  const city = (document.getElementById('carCityFilter').value || '').toLowerCase().trim();
+  const status = document.getElementById('carStatusFilter').value;
+  const rows = document.querySelectorAll('#carsTable tbody tr');
+  rows.forEach(function(r) {
+    const model = r.getAttribute('data-model') || '';
+    const specs = r.getAttribute('data-specs') || '';
+    const rCity = r.getAttribute('data-city') || '';
+    const rStatus = r.getAttribute('data-status') || '';
+    const matchText = !q || model.includes(q) || specs.includes(q) || rCity.includes(q);
+    const matchCity = !city || rCity === city;
+    const matchStatus = !status || rStatus === status;
+    r.style.display = (matchText && matchCity && matchStatus) ? '' : 'none';
+  });
+}
+
+// Live filter for Bookings table
+function filterBookingsTable() {
+  const q = (document.getElementById('bookingSearchInput').value || '').toLowerCase().trim();
+  const status = (document.getElementById('bookingStatusFilter').value || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('#bookingsTable tbody tr');
+  rows.forEach(function(r) {
+    const id = r.getAttribute('data-id') || '';
+    const user = r.getAttribute('data-user') || '';
+    const model = r.getAttribute('data-model') || '';
+    const loc = r.getAttribute('data-location') || '';
+    const rStatus = r.getAttribute('data-status') || '';
+    const matchText = !q || id.includes(q) || user.includes(q) || model.includes(q) || loc.includes(q);
+    const matchStatus = !status || rStatus === status;
+    r.style.display = (matchText && matchStatus) ? '' : 'none';
+  });
+}
+</script>
 {% endblock %}
